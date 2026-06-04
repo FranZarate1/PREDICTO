@@ -1,0 +1,29 @@
+{
+  "name": "appmundial-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "node --watch src/app.js",
+    "start": "node src/app.js",
+    "db:generate": "npx prisma generate --schema=src/prisma/schema.prisma",
+    "db:push": "npx prisma db push --schema=src/prisma/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema=src/prisma/schema.prisma",
+    "db:seed": "node src/seeds/seed.js",
+    "db:studio": "npx prisma studio --schema=src/prisma/schema.prisma",
+    "lint": "echo \"TODO: configure eslint\""
+  },
+  "dependencies": {
+    "@prisma/client": "^6.9.0",
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.9.0"
+  }
+}

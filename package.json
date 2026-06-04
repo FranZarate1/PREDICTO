@@ -1,0 +1,24 @@
+{
+  "name": "appmundial",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App interactiva de predicciones del Mundial de Fútbol con motor de probabilidades",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "install:all": "npm install",
+    "lint": "concurrently \"npm run lint -w server\" \"npm run lint -w client\"",
+    "poc": "node poc/football-data-poc.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

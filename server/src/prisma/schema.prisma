@@ -1,0 +1,208 @@
+// =====================================================
+// Prisma Schema — App Mundial de Predicciones
+// =====================================================
+// Modelo ER basado en: Tournament → Groups → Teams/Matches
+//                       User → Predictions → PredictionItems
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Torneo ──────────────────────────────────────────────
+
+model Tournament {
+  id           String   @id @default(cuid())
+  name         String               // "FIFA World Cup 2026"
+  code         String   @unique     // "WC"
+  year         Int
+  currentStage String   @default("GROUP_STAGE")
+  startDate    DateTime?
+  endDate      DateTime?
+  externalId   Int?     @unique     // ID de Football-Data.org
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groups      Group[]
+  predictions UserPrediction[]
+
+  @@map("tournaments")
+}
+
+// ── Equipo ──────────────────────────────────────────────
+
+model Team {
+  id          String  @id @default(cuid())
+  name        String               // "Argentina"
+  shortName   String?              // "ARG"
+  tla         String?              // Three-Letter Abbreviation
+  crestUrl    String?              // URL del escudo
+  fifaRanking Int?
+  externalId  Int?    @unique      // ID de Football-Data.org
+  createdAt   DateTime @default(now())
+
+  groupTeams         GroupTeam[]
+  homeMatches        Match[]          @relation("HomeTeam")
+  awayMatches        Match[]          @relation("AwayTeam")
+  groupOdds          GroupOdd[]
+  firstPlacePicks    PredictionItem[] @relation("FirstPlace")
+  secondPlacePicks   PredictionItem[] @relation("SecondPlace")
+
+  @@map("teams")
+}
+
+// ── Grupo ───────────────────────────────────────────────
+
+model Group {
+  id           String   @id @default(cuid())
+  name         String                // "Group A", "Group B", etc.
+  tournamentId String
+  stage        String   @default("GROUP_STAGE")
+  externalId   Int?
+
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  groupTeams   GroupTeam[]
+  matches      Match[]
+  groupOdds    GroupOdd[]
+  predictionItems PredictionItem[]
+
+  @@unique([tournamentId, name])
+  @@map("groups")
+}
+
+// ── Equipo en Grupo (tabla de posiciones) ───────────────
+
+model GroupTeam {
+  id            String @id @default(cuid())
+  groupId       String
+  teamId        String
+  position      Int    @default(0)     // Posición actual en el grupo
+  playedGames   Int    @default(0)
+  won           Int    @default(0)
+  draw          Int    @default(0)
+  lost          Int    @default(0)
+  goalsFor      Int    @default(0)
+  goalsAgainst  Int    @default(0)
+  goalDifference Int   @default(0)
+  points        Int    @default(0)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, teamId])
+  @@map("group_teams")
+}
+
+// ── Partido ─────────────────────────────────────────────
+
+model Match {
+  id          String    @id @default(cuid())
+  groupId     String
+  homeTeamId  String
+  awayTeamId  String
+  matchday    Int       @default(1)     // Jornada dentro del grupo
+  utcDate     DateTime                   // Fecha y hora del partido
+  status      String    @default("SCHEDULED") // SCHEDULED, IN_PLAY, FINISHED, etc.
+  homeScore   Int?
+  awayScore   Int?
+  externalId  Int?      @unique
+
+  group    Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  homeTeam Team       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  odds     MatchOdd[]
+
+  @@map("matches")
+}
+
+// ── Cuotas de Partido ───────────────────────────────────
+
+model MatchOdd {
+  id        String   @id @default(cuid())
+  matchId   String
+  bookmaker String            // Nombre de la casa de apuestas
+  homeWin   Float             // Cuota decimal para victoria local
+  draw      Float             // Cuota decimal para empate
+  awayWin   Float             // Cuota decimal para victoria visitante
+  updatedAt DateTime @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, bookmaker])
+  @@map("match_odds")
+}
+
+// ── Cuotas Outright de Grupo ────────────────────────────
+// Cuotas de "clasificación de grupo" (no de partido individual)
+
+model GroupOdd {
+  id         String   @id @default(cuid())
+  groupId    String
+  teamId     String
+  bookmaker  String
+  toQualify  Float?           // Cuota para clasificar (top 2)
+  toWinGroup Float?           // Cuota para ganar el grupo (1ro)
+  updatedAt  DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, teamId, bookmaker])
+  @@map("group_odds")
+}
+
+// ── Usuario ─────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  displayName String
+  createdAt   DateTime @default(now())
+
+  predictions UserPrediction[]
+
+  @@map("users")
+}
+
+// ── Predicción del Usuario ──────────────────────────────
+// Una predicción completa por torneo
+
+model UserPrediction {
+  id                  String   @id @default(cuid())
+  userId              String
+  tournamentId        String
+  combinedProbability Float?           // Probabilidad combinada calculada
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tournament Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  items      PredictionItem[]
+
+  @@unique([userId, tournamentId])
+  @@map("user_predictions")
+}
+
+// ── Item de Predicción ──────────────────────────────────
+// El usuario elige 1ro y 2do de cada grupo
+
+model PredictionItem {
+  id                String @id @default(cuid())
+  predictionId      String
+  groupId           String
+  firstPlaceTeamId  String
+  secondPlaceTeamId String
+  groupProbability  Float?        // Probabilidad individual de esta predicción de grupo
+
+  prediction  UserPrediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  group       Group          @relation(fields: [groupId], references: [id])
+  firstPlace  Team           @relation("FirstPlace", fields: [firstPlaceTeamId], references: [id])
+  secondPlace Team           @relation("SecondPlace", fields: [secondPlaceTeamId], references: [id])
+
+  @@unique([predictionId, groupId])
+  @@map("prediction_items")
+}
