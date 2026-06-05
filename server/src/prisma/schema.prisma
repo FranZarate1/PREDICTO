@@ -9,8 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // Pooler (transacciones)
+  directUrl = env("DIRECT_URL")         // Directo (migraciones)
 }
 
 // ── Torneo ──────────────────────────────────────────────
@@ -23,7 +24,6 @@ model Tournament {
   currentStage String   @default("GROUP_STAGE")
   startDate    DateTime?
   endDate      DateTime?
-  externalId   Int?     @unique     // ID de Football-Data.org
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -36,14 +36,18 @@ model Tournament {
 // ── Equipo ──────────────────────────────────────────────
 
 model Team {
-  id          String  @id @default(cuid())
-  name        String               // "Argentina"
-  shortName   String?              // "ARG"
-  tla         String?              // Three-Letter Abbreviation
-  crestUrl    String?              // URL del escudo
-  fifaRanking Int?
-  externalId  Int?    @unique      // ID de Football-Data.org
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  name          String               // "Argentina"
+  shortName     String?              // "ARG"
+  tla           String?              // Three-Letter Abbreviation: "ARG", "BRA"
+  crestUrl      String?              // URL del escudo (scrapeado de Wikipedia)
+  flagUrl       String?              // URL de la bandera
+  fifaRanking   Int?                 // Ranking FIFA al momento del torneo
+  confederation String?              // CONMEBOL, UEFA, CAF, etc.
+  coach         String?              // Nombre del entrenador
+  wikipediaUrl  String?              // URL de Wikipedia del equipo
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   groupTeams         GroupTeam[]
   homeMatches        Match[]          @relation("HomeTeam")
@@ -51,7 +55,9 @@ model Team {
   groupOdds          GroupOdd[]
   firstPlacePicks    PredictionItem[] @relation("FirstPlace")
   secondPlacePicks   PredictionItem[] @relation("SecondPlace")
+  players            Player[]
 
+  @@unique([name])
   @@map("teams")
 }
 
@@ -62,7 +68,6 @@ model Group {
   name         String                // "Group A", "Group B", etc.
   tournamentId String
   stage        String   @default("GROUP_STAGE")
-  externalId   Int?
 
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   groupTeams   GroupTeam[]
@@ -101,33 +106,40 @@ model GroupTeam {
 
 model Match {
   id          String    @id @default(cuid())
-  groupId     String
+  groupId     String?
+  stage       String    @default("GROUP_STAGE") // GROUP_STAGE, ROUND_OF_32, etc.
   homeTeamId  String
   awayTeamId  String
-  matchday    Int       @default(1)     // Jornada dentro del grupo
-  utcDate     DateTime                   // Fecha y hora del partido
-  status      String    @default("SCHEDULED") // SCHEDULED, IN_PLAY, FINISHED, etc.
+  matchday    Int?                              // Jornada dentro del grupo (1, 2 o 3)
+  matchDate   DateTime                          // Fecha y hora del partido (UTC)
+  venue       String?                           // Estadio
+  city        String?                           // Ciudad sede
+  status      String    @default("SCHEDULED")  // SCHEDULED, IN_PLAY, FINISHED
   homeScore   Int?
   awayScore   Int?
-  externalId  Int?      @unique
+  homePenalty Int?                              // Penales (eliminatorias)
+  awayPenalty Int?                              // Penales (eliminatorias)
+  scrapedAt   DateTime?                         // Cuándo fue scrapeado por última vez
 
-  group    Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  homeTeam Team       @relation("HomeTeam", fields: [homeTeamId], references: [id])
-  awayTeam Team       @relation("AwayTeam", fields: [awayTeamId], references: [id])
-  odds     MatchOdd[]
+  group       Group?      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  homeTeam    Team        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  odds        MatchOdd[]
+  playerStats PlayerStat[]
 
   @@map("matches")
 }
 
 // ── Cuotas de Partido ───────────────────────────────────
+// Reservado para Fase 2 si se incorporan probabilidades basadas en odds
 
 model MatchOdd {
   id        String   @id @default(cuid())
   matchId   String
-  bookmaker String            // Nombre de la casa de apuestas
-  homeWin   Float             // Cuota decimal para victoria local
-  draw      Float             // Cuota decimal para empate
-  awayWin   Float             // Cuota decimal para victoria visitante
+  bookmaker String
+  homeWin   Float
+  draw      Float
+  awayWin   Float
   updatedAt DateTime @updatedAt
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -137,15 +149,14 @@ model MatchOdd {
 }
 
 // ── Cuotas Outright de Grupo ────────────────────────────
-// Cuotas de "clasificación de grupo" (no de partido individual)
 
 model GroupOdd {
   id         String   @id @default(cuid())
   groupId    String
   teamId     String
   bookmaker  String
-  toQualify  Float?           // Cuota para clasificar (top 2)
-  toWinGroup Float?           // Cuota para ganar el grupo (1ro)
+  toQualify  Float?
+  toWinGroup Float?
   updatedAt  DateTime @updatedAt
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -153,6 +164,70 @@ model GroupOdd {
 
   @@unique([groupId, teamId, bookmaker])
   @@map("group_odds")
+}
+
+// ── Jugador ─────────────────────────────────────────────
+
+model Player {
+  id           String  @id @default(cuid())
+  teamId       String
+  name         String
+  position     String?              // GK, DEF, MID, FWD
+  number       Int?                 // Número de camiseta
+  dateOfBirth  DateTime?
+  nationality  String?
+  club         String?              // Club actual
+  photoUrl     String?
+  wikipediaUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team  Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  stats PlayerStat[]
+
+  @@unique([teamId, number])
+  @@map("players")
+}
+
+// ── Estadísticas de Jugador por Partido ─────────────────
+
+model PlayerStat {
+  id           String  @id @default(cuid())
+  playerId     String
+  matchId      String
+  goals        Int     @default(0)
+  assists      Int     @default(0)
+  yellowCards  Int     @default(0)
+  redCards     Int     @default(0)
+  minutesPlayed Int    @default(0)
+  rating       Float?               // Rating de Sofascore (0-10)
+  source       String  @default("sofascore") // De dónde se scrapeó
+  scrapedAt    DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  match  Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, matchId])
+  @@map("player_stats")
+}
+
+// ── Log de Scraping ─────────────────────────────────────
+// Registro de cada ejecución del scraper (admin)
+
+model ScrapingLog {
+  id          String   @id @default(cuid())
+  triggeredAt DateTime @default(now())
+  stage       String                    // GROUP_STAGE, ROUND_OF_16, etc.
+  matchday    Int?                      // Jornada (solo fase de grupos)
+  status      String   @default("RUNNING") // RUNNING, SUCCESS, PARTIAL, FAILED
+  source      String   @default("SCHEDULED") // SCHEDULED o MANUAL
+  durationMs  Int?                      // Tiempo total de ejecución
+  matchesUpdated Int   @default(0)      // Cuántos partidos se actualizaron
+  playersUpdated Int   @default(0)      // Cuántos registros de jugadores
+  errors      Json?                     // Errores por scraper {espn: null, sofascore: "..."}  
+  details     Json?                     // Info adicional de la ejecución
+
+  @@map("scraping_logs")
 }
 
 // ── Usuario ─────────────────────────────────────────────
