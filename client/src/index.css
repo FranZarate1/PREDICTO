@@ -1,85 +1,67 @@
 /* ========================================
-   App Mundial — Design System
+   App Mundial — Design System v2
    ======================================== */
 
-/* ── CSS Variables (Design Tokens) ────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* ── CSS Variables ────────────────────── */
 :root {
-  /* Colores primarios */
-  --color-primary: #6366f1;        /* Indigo */
+  --color-primary:       #6366f1;
   --color-primary-light: #818cf8;
-  --color-primary-dark: #4f46e5;
+  --color-primary-dark:  #4f46e5;
+  --color-accent:        #f59e0b;
+  --color-accent-light:  #fbbf24;
+  --color-accent-dark:   #d97706;
+  --color-success:       #10b981;
+  --color-error:         #ef4444;
+  --color-warning:       #f59e0b;
 
-  /* Colores de acento */
-  --color-accent: #f59e0b;         /* Amber (dorado mundialista) */
-  --color-accent-light: #fbbf24;
-  --color-accent-dark: #d97706;
+  --bg-primary:    #090e1a;
+  --bg-secondary:  #111827;
+  --bg-card:       #141c2e;
+  --bg-glass:      rgba(17, 24, 39, 0.8);
 
-  /* Colores de éxito / error */
-  --color-success: #10b981;
-  --color-error: #ef4444;
-  --color-warning: #f59e0b;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
 
-  /* Backgrounds */
-  --bg-primary: #0f172a;           /* Slate 900 */
-  --bg-secondary: #1e293b;         /* Slate 800 */
-  --bg-card: #1e293b;
-  --bg-card-hover: #334155;        /* Slate 700 */
-  --bg-glass: rgba(30, 41, 59, 0.7);
-
-  /* Texto */
-  --text-primary: #f1f5f9;         /* Slate 100 */
-  --text-secondary: #94a3b8;       /* Slate 400 */
-  --text-muted: #64748b;           /* Slate 500 */
-
-  /* Bordes */
-  --border-color: #334155;
+  --border-color:     rgba(99,102,241,0.15);
   --border-radius-sm: 8px;
   --border-radius-md: 12px;
   --border-radius-lg: 16px;
   --border-radius-xl: 24px;
 
-  /* Sombras */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:   0 10px 30px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 24px rgba(99,102,241,0.35);
 
-  /* Tipografía */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
+  --font-family:   'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-size-xs:  0.75rem;
+  --font-size-sm:  0.875rem;
+  --font-size-base:1rem;
+  --font-size-lg:  1.125rem;
+  --font-size-xl:  1.25rem;
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
-  --font-size-4xl: 2.25rem;
+  --font-size-4xl: 2.5rem;
 
-  /* Espaciado */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  --spacing-2xl: 48px;
+  --spacing-xs:  4px;
+  --spacing-sm:  8px;
+  --spacing-md:  16px;
+  --spacing-lg:  24px;
+  --spacing-xl:  32px;
+  --spacing-2xl: 56px;
 
-  /* Transiciones */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 400ms ease;
+  --transition-fast: 120ms ease;
+  --transition-base: 220ms ease;
+  --transition-slow: 360ms ease;
 }
 
-/* ── Reset global ─────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* ── Reset ────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html {
-  font-size: 16px;
-  scroll-behavior: smooth;
-}
+html { font-size: 16px; scroll-behavior: smooth; }
 
 body {
   font-family: var(--font-family);
@@ -88,65 +70,73 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Fondo con patrón de puntos sutil */
+  background-image: radial-gradient(rgba(99,102,241,0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-/* ── Utilidades ───────────────────────── */
+/* ── Layout ───────────────────────────── */
 .container {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 var(--spacing-lg);
 }
 
+/* ── Glass card ───────────────────────── */
 .glass {
   background: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 /* ── Animaciones ──────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeIn    { from { opacity: 0; transform: translateY(8px); }  to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp   { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse     { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes spin      { to { transform: rotate(360deg); } }
+@keyframes shimmer   { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(99,102,241,0.3); }
+  50%       { box-shadow: 0 0 28px rgba(99,102,241,0.6); }
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.animate-fade-in   { animation: fadeIn  var(--transition-base) forwards; }
+.animate-slide-up  { animation: slideUp var(--transition-slow) both; }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.animate-fade-in {
-  animation: fadeIn var(--transition-base) forwards;
-}
-
-.animate-slide-up {
-  animation: slideUp var(--transition-slow) forwards;
+/* ── Spinner ──────────────────────────── */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 /* ── Gradientes ───────────────────────── */
-.gradient-primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-}
-
-.gradient-accent {
-  background: linear-gradient(135deg, var(--color-accent-dark), var(--color-accent));
-}
-
 .gradient-text {
-  background: linear-gradient(135deg, var(--color-primary-light), var(--color-accent));
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-accent) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+.gradient-primary { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); }
+.gradient-accent  { background: linear-gradient(135deg, var(--color-accent-dark), var(--color-accent)); }
+
+/* ── Scrollbar ────────────────────────── */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* ── Badges de confederación ──────────── */
+.badge-uefa     { background: rgba(0,51,153,0.2);  color: #6699ff; border-color: rgba(0,51,153,0.4); }
+.badge-conmebol { background: rgba(0,153,0,0.2);   color: #66cc66; border-color: rgba(0,153,0,0.4); }
+.badge-concacaf { background: rgba(204,0,0,0.2);   color: #ff6666; border-color: rgba(204,0,0,0.4); }
+.badge-afc      { background: rgba(255,102,0,0.2); color: #ff9966; border-color: rgba(255,102,0,0.4); }
+.badge-caf      { background: rgba(204,153,0,0.2); color: #ffcc44; border-color: rgba(204,153,0,0.4); }
+.badge-ofc      { background: rgba(153,0,204,0.2); color: #cc66ff; border-color: rgba(153,0,204,0.4); }

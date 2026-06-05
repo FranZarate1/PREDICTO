@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import prisma from '../config/db.js';
-import { calculateCombinedProbability, oddToImpliedProbability } from '../services/probability.service.js';
+import {
+  calculateCombinedProbability,
+  oddToImpliedProbability,
+  estimateProbabilityByRanking,
+} from '../services/probability.service.js';
 
 const router = Router();
 
@@ -71,99 +75,76 @@ router.post('/', async (req, res, next) => {
 router.post('/calculate', async (req, res, next) => {
   try {
     const { predictionId, items } = req.body;
-
     let predictionItems = items;
 
-    // Si se envía un predictionId, buscar los items en la DB
     if (predictionId) {
       const prediction = await prisma.userPrediction.findUnique({
         where: { id: predictionId },
         include: { items: true },
       });
-
       if (!prediction) {
-        const err = new Error('Predicción no encontrada');
-        err.statusCode = 404;
-        throw err;
+        const err = new Error('Predicción no encontrada'); err.statusCode = 404; throw err;
       }
-
       predictionItems = prediction.items;
     }
 
     if (!predictionItems || predictionItems.length === 0) {
-      const err = new Error('No hay items de predicción para calcular');
-      err.statusCode = 400;
-      throw err;
+      const err = new Error('No hay items de predicción'); err.statusCode = 400; throw err;
     }
 
-    // Para cada item, buscar la cuota outright del equipo elegido como 1ro
     const groupProbabilities = [];
 
     for (const item of predictionItems) {
-      // Buscar cuota de "ganar el grupo" para el equipo elegido como 1ro
-      const firstPlaceOdd = await prisma.groupOdd.findFirst({
-        where: {
-          groupId: item.groupId,
-          teamId: item.firstPlaceTeamId,
-        },
-      });
+      // 1. Intentar con GroupOdds (bookmaker data)
+      const [firstPlaceOdd, secondPlaceOdd] = await Promise.all([
+        prisma.groupOdd.findFirst({ where: { groupId: item.groupId, teamId: item.firstPlaceTeamId } }),
+        prisma.groupOdd.findFirst({ where: { groupId: item.groupId, teamId: item.secondPlaceTeamId } }),
+      ]);
 
-      // Buscar cuota de "clasificar" para el equipo elegido como 2do
-      const secondPlaceOdd = await prisma.groupOdd.findFirst({
-        where: {
-          groupId: item.groupId,
-          teamId: item.secondPlaceTeamId,
-        },
-      });
+      let firstProb  = firstPlaceOdd?.toWinGroup  ? oddToImpliedProbability(firstPlaceOdd.toWinGroup)  : null;
+      let secondProb = secondPlaceOdd?.toQualify   ? oddToImpliedProbability(secondPlaceOdd.toQualify)  : null;
+      let source     = 'bookmaker';
 
-      const firstProb = firstPlaceOdd?.toWinGroup
-        ? oddToImpliedProbability(firstPlaceOdd.toWinGroup)
-        : null;
+      // 2. Fallback: estimación por ranking FIFA
+      if (firstProb === null || secondProb === null) {
+        const groupTeams = await prisma.groupTeam.findMany({
+          where:   { groupId: item.groupId },
+          include: { team: true },
+        });
+        const estimate = estimateProbabilityByRanking(
+          groupTeams.map(gt => gt.team),
+          item.firstPlaceTeamId,
+          item.secondPlaceTeamId,
+        );
+        if (estimate) {
+          firstProb  = estimate.firstProb;
+          secondProb = estimate.secondProb;
+          source     = 'fifa_ranking';
+        }
+      }
 
-      const secondProb = secondPlaceOdd?.toQualify
-        ? oddToImpliedProbability(secondPlaceOdd.toQualify)
+      const groupProbability = (firstProb && secondProb)
+        ? (firstProb / 100) * (secondProb / 100) * 100
         : null;
 
       groupProbabilities.push({
-        groupId: item.groupId,
-        firstPlaceTeamId: item.firstPlaceTeamId,
-        secondPlaceTeamId: item.secondPlaceTeamId,
+        groupId:              item.groupId,
+        firstPlaceTeamId:     item.firstPlaceTeamId,
+        secondPlaceTeamId:    item.secondPlaceTeamId,
         firstPlaceProbability: firstProb,
         secondPlaceProbability: secondProb,
-        // Probabilidad combinada de este grupo: P(1ro) × P(2do clasificar)
-        groupProbability: firstProb && secondProb
-          ? (firstProb / 100) * (secondProb / 100) * 100
-          : null,
+        groupProbability,
+        source,
       });
     }
 
-    const validProbabilities = groupProbabilities
-      .map((g) => g.groupProbability)
-      .filter((p) => p !== null);
+    const validProbs       = groupProbabilities.filter(g => g.groupProbability !== null).map(g => g.groupProbability);
+    const combinedProbability = validProbs.length > 0 ? calculateCombinedProbability(validProbs) : null;
+    const usedRankingFallback = groupProbabilities.some(g => g.source === 'fifa_ranking');
 
-    const combinedProbability = validProbabilities.length > 0
-      ? calculateCombinedProbability(validProbabilities)
-      : null;
-
-    // Si hay un predictionId, guardar el resultado
+    // Guardar si viene de predictionId
     if (predictionId && combinedProbability !== null) {
-      await prisma.userPrediction.update({
-        where: { id: predictionId },
-        data: { combinedProbability },
-      });
-
-      // Actualizar probabilidades individuales
-      for (const gp of groupProbabilities) {
-        if (gp.groupProbability !== null) {
-          await prisma.predictionItem.updateMany({
-            where: {
-              predictionId,
-              groupId: gp.groupId,
-            },
-            data: { groupProbability: gp.groupProbability },
-          });
-        }
-      }
+      await prisma.userPrediction.update({ where: { id: predictionId }, data: { combinedProbability } });
     }
 
     res.json({
@@ -171,7 +152,11 @@ router.post('/calculate', async (req, res, next) => {
       data: {
         groupProbabilities,
         combinedProbability,
-        totalGroupsWithOdds: validProbabilities.length,
+        totalGroupsWithData: validProbs.length,
+        source: usedRankingFallback ? 'fifa_ranking' : 'bookmaker',
+        note: usedRankingFallback
+          ? 'Probabilidades estimadas con ranking FIFA. Se actualizarán con cuotas reales durante el torneo.'
+          : null,
       },
     });
   } catch (error) {

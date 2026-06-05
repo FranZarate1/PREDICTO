@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// Env loaded via --env-file flag in package.json scripts
 
 const config = {
   port: parseInt(process.env.PORT || '3001', 10),

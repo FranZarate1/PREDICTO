@@ -44,7 +44,7 @@ router.get('/:id', async (req, res, next) => {
             awayTeam: true,
             odds: true,
           },
-          orderBy: { utcDate: 'asc' },
+          orderBy: { matchDate: 'asc' },
         },
       },
     });
